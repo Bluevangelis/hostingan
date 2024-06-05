@@ -1,0 +1,1405 @@
+const firebase = require('../db');
+const firestore = firebase.firestore();
+const { v4: uuidv4 } = require('uuid');
+const jwt = require("jsonwebtoken");
+const bcryptjs = require("bcryptjs");
+const nodemailer = require('nodemailer');
+
+const {Timestamp, FieldValue, Filter, FieldPath } = require('firebase-admin/firestore');
+
+const resolvers = {
+    Query:{
+      async rekomendasiPakaiPengecekan(_,args){
+        try {
+
+          return{
+            code: 200,
+            status: "Success",
+            pesan: "true"
+          }
+        } catch (error) {
+          console.log(error)
+          return{
+            code: 500,
+            status: "failed",
+            pesan: "terjadi kesalahan server"
+          }
+        }
+      },
+      async demografiBisaUpdate(_,args){
+        try {
+          return{
+            code: 200,
+            status: "Success",
+            pesan: "true"
+          }
+        } catch (error) {
+          console.log(error)
+          return{
+            code: 500,
+            status: "failed",
+            pesan: "terjadi kesalahan server"
+          }
+        }
+      },
+      
+      async getSejarahPencairan(_,args){
+        try {
+          let sejarahRef = await firestore.collection("pencairan").where('idUser','==',args.idUser).get()
+          if(sejarahRef.empty)
+          {
+            return{
+              code:200,
+              status:"success",
+              data:[]
+            }
+          }
+          else{
+            let snapshot = sejarahRef.docs.map(doc => {return {idPengajuan: doc.id, ...doc.data()}})
+            for(let e in snapshot){
+              snapshot[e].waktu_pengajuan = snapshot[e].waktu_pengajuan._seconds
+            }
+            return{
+              code:200,
+              status:"success",
+              data:snapshot
+            }
+          }
+          
+        } catch (error) {
+          console.log(error)
+          return{
+            code:200,
+            status:"success",
+            data:[]
+          }
+        }
+      },
+      async getAllHistory(_,args){
+        try {
+          let jawabanRef = await firestore.collection("jawaban-survei-v3").where('idUser','==',args.idUser).get()
+          let snapshot = jawabanRef.docs.map(doc => {return {idJawaban: doc.id, ...doc.data()}})
+
+          let arrSurvei = []
+          for(let e in snapshot){
+            arrSurvei.push(snapshot[e].idSurvei)
+          }
+          if(arrSurvei.length == 0){
+            return {
+              code: 200,
+              status: "success",
+              data:[],
+            }
+          }
+          else{
+            // .orderBy(FieldPath.documentId())
+            let surveiRef = await firestore.collection("h_survei").where(FieldPath.documentId(), 'in', arrSurvei ).get()
+            let snapshotSurvei = surveiRef.docs.map(doc => {return {id_survei: doc.id, ...doc.data()}})
+            for(let e in snapshotSurvei){
+              snapshotSurvei[e].insentif = snapshot[e].insentif
+              snapshotSurvei[e].tglPengisian = snapshot[e].tglPengisian._seconds
+              if(snapshot[e].gambarSurvei == null){
+                snapshot[e].gambarSurvei = ""
+              }
+            }
+            console.log(snapshotSurvei)
+            return {
+              code: 200,
+              status: "success",
+              data:snapshotSurvei,
+            }
+          }
+        } catch (error) {
+          console.log(error)
+          return {
+            code: 500,
+            status: "failed",
+            data:[],
+          }
+        }
+      },
+      // async getSurveiTerlarang(_,args){
+      //   try {
+      //     let jawabanRef = await firestore.collection("jawaban-survei").where('idUser','==',args.idUser).get()
+      //     var arrTemp = []
+      //     jawabanRef.docs.forEach(element => {
+      //       arrTemp.push(element.data().idSurvei)
+      //     });
+      //     return {
+      //       code: 200,
+      //       status: "success",
+      //       data:arrTemp,
+      //     }
+    
+      //   } catch (error) {
+      //     console.log(error)
+      //     return {
+      //       code: 500,
+      //       status: "failed",
+      //       data:[],
+      //     }
+      //   }
+      // },
+      async getSurveiTerlarang(_,args){
+        try {
+          let jawabanRef = await firestore.collection("jawaban-survei-v3").where('idUser','==',args.idUser).get()
+          // let snapshot = jawabanRef.docs.map(doc => {return {idJawaban: doc.id, ...doc.data()}})
+          var arrTemp = []
+          jawabanRef.docs.forEach(element => {
+            arrTemp.push(element.data().idSurvei)
+          });
+          return {
+            code: 200,
+            status: "success",
+            data:arrTemp,
+          }
+    
+        } catch (error) {
+          console.log(error)
+          return {
+            code: 500,
+            status: "failed",
+            data:[],
+          }
+        }
+      },
+      async getAllDemoSurvei(_,args){
+        try {
+          let tigaSurveiRef = await firestore.collection("h_survei").where('pakaiDemografi', '==', true).get()
+          let snapshot = tigaSurveiRef.docs.map(doc => {return {id_survei : doc.id, ...doc.data()}})
+          for(let e in snapshot){
+            snapshot[e].tanggal_penerbitan = snapshot[e].tanggal_penerbitan._seconds
+            snapshot[e].insentif = snapshot[e].insentifPerPartisipan
+            if(snapshot[e].gambarSurvei == null){
+              snapshot[e].gambarSurvei = ""
+            }
+          }
+          return{
+            code: 200,
+            status: "Success",
+            data:snapshot
+        }
+        } catch (error) {
+          console.log(error)
+          return{
+                code: 500,
+                status: "failed",
+                data:[]
+            }
+        }
+      },
+      async getDefaultSurvei(_,args){
+        try {
+          let tigaSurveiRef = await firestore.collection("h_survei").orderBy('tanggal_penerbitan', 'desc').where('pakaiDemografi', '==', false).limit(10).get()
+          let arrSurvei = []
+          let snapshot = tigaSurveiRef.docs.map(doc => {return {id_survei : doc.id, ...doc.data()}})
+          for(let e in snapshot){
+            snapshot[e].tanggal_penerbitan = snapshot[e].tanggal_penerbitan._seconds
+            snapshot[e].insentif = snapshot[e].insentifPerPartisipan
+            if(snapshot[e].gambarSurvei == null){
+                snapshot[e].gambarSurvei = ""
+              }
+          }
+
+          return{
+            code: 200,
+            status: "Success",
+            data:snapshot
+          }
+        } 
+        catch (error) {
+          console.log(error)
+          return{
+                code: 500,
+                status: "failed",
+                data:[]
+            }
+        }
+      },
+      async getIdForm(_,args){
+        try {
+          let surveiRef = await firestore.collection("d_survei").doc(args.idSurvei).get()
+          let idForm = surveiRef.data().idForm
+          return{
+            code: 200,
+            status: "Success",
+            pesan: idForm
+          }
+        } catch (error) {
+          console.log(error)
+          return{
+                code: 500,
+                status: "failed",
+                data:""
+            }
+        }
+      },
+      async cekIsiSurvei(_,args){
+        try {
+          let surveiRef = await firestore.collection("h_survei").doc(args.idSurvei).get()
+          let batas = surveiRef.data().batasPartisipan
+          let jumlah = surveiRef.data().jumlahPartisipan
+          if(batas > jumlah){
+            return{
+              code: 200,
+              status: "Success",
+              pesan: surveiRef.data().idForm
+            }
+          }
+          else{
+            return{
+              code: 400,
+              status: "Memenuhi Batas",
+              pesan: ""
+            }
+          }
+        } catch (error) {
+          console.log(error)
+          return{
+                code: 500,
+                status: "failed",
+                data:""
+            }
+        }
+      },
+      // async getSurveiTerbaru(_,args){
+      //   try {
+      //     let tigaSurveiRef = await firestore.collection("h_survei").orderBy('tanggal_penerbitan', 'desc').where('pakaiDemografi','==',false).limit(5).get()
+      //     let snapshot = tigaSurveiRef.docs.map(doc => {return {id_survei : doc.id, ...doc.data()}})
+      //     for(let e in snapshot){
+      //       snapshot[e].tanggal_penerbitan = snapshot[e].tanggal_penerbitan._seconds
+      //       snapshot[e].insentif = snapshot[e].insentifPerPartisipan
+      //       if(snapshot[e].gambarSurvei == null){
+      //         snapshot[e].gambarSurvei = ""
+      //       }
+      //     }
+      //     return{
+      //       code: 200,
+      //       status: "Success",
+      //       data:snapshot
+      //   }
+      //   } catch (error) {
+      //     console.log(error)
+      //     return{
+      //           code: 500,
+      //           status: "failed",
+      //           data:[]
+      //       }
+      //   }
+      // },
+      async getSurveiTerbaru(_,args){
+        try {
+          let arrPilihan = [
+              'HSV - 0136a7d',
+              'HSV - 145499c',
+              'HSV - 16ba051',
+              'HSV - 6adc863',
+              'HSV - e3bee11',
+          ]
+          let tigaSurveiRef = await firestore.collection("h_survei").orderBy(FieldPath.documentId()).where(FieldPath.documentId(), 'in', arrPilihan).get()
+          let snapshot = tigaSurveiRef.docs.map(doc => {return {id_survei : doc.id, ...doc.data()}})
+          for(let e in snapshot){
+            snapshot[e].tanggal_penerbitan = snapshot[e].tanggal_penerbitan._seconds
+            snapshot[e].insentif = snapshot[e].insentifPerPartisipan
+            if(snapshot[e].gambarSurvei == null){
+              snapshot[e].gambarSurvei = ""
+            }
+          }
+
+          return{
+            code: 200,
+            status: "Success",
+            data:snapshot
+          }
+        } catch (error) {
+          console.log(error)
+          return{
+                code: 500,
+                status: "failed",
+                data:[]
+            }
+        }
+      },
+      async getSurveiDetail(_,args){
+        try {
+          let hSurveiRef = await firestore.collection("h_survei").doc(args.idSurvei).get()
+          // let dSurveiRef = await firestore.collection("d_survei").doc(args.idSurvei).get()
+          let survei = {id_survei : hSurveiRef.id, ...hSurveiRef.data()}
+          // let dSurvei = {id_survei : dSurveiRef.id, ...dSurveiRef.data()}
+
+          survei.tanggal_penerbitan = survei.tanggal_penerbitan._seconds
+          survei.insentif = survei.insentifPerPartisipan
+          console.log(survei)
+
+          let userRef = await firestore.collection("Users").doc(survei.idUser).get()
+          return{
+            code:200,
+            status:"success",
+            survei:survei,
+            user:{...userRef.data()}
+          }
+        } catch (error) {
+          console.log(error)
+          return{
+            code:500,
+            status:"Server Error, akibat : " + error,
+            survei:null,
+            user:null
+          }
+        }
+      },
+      // async getSurveiDetail(_,args){
+      //   try {
+      //     let hSurveiRef = await firestore.collection("h_survei").doc(args.idSurvei).get()
+      //     let dSurveiRef = await firestore.collection("d_survei").doc(args.idSurvei).get()
+
+      //     let survei = {id_survei : hSurveiRef.id, ...hSurveiRef.data()}
+      //     let dSurvei = {id_survei : dSurveiRef.id, ...dSurveiRef.data()}
+
+      //     survei.tanggal_penerbitan = survei.tanggal_penerbitan._seconds
+      //     survei.insentif = dSurvei.insentifPerPartisipan
+
+      //     let userRef = await firestore.collection("Users").doc(survei.idUser).get()
+      //     // console.log(survei)
+      //     return{
+      //       code:200,
+      //       status:"success",
+      //       survei:survei,
+      //       user:{...userRef.data()}
+      //     }
+      //   } catch (error) {
+      //     console.log(error)
+      //     return{
+      //       code:500,
+      //       status:"Server Error, akibat : " + error,
+      //       survei:null,
+      //       user:null
+      //     }
+      //   }
+      // },
+      async getAllInterest(_,args){
+        try {
+          let kategoriRef = await firestore.collection("interest").orderBy('nama').get()
+          
+          var arrTemp = []
+          var hasil = kategoriRef.docs.forEach(element => {
+            
+            arrTemp.push(element.data().nama)
+            
+          });
+          
+
+          return {
+            code:200,
+            status:"Data berhasil diambil",
+            data: arrTemp
+          }
+        } catch (error) {
+          console.log(error)
+          return {
+            code:500,
+            status:"Server Error, akibat : " + e,
+            data:[]
+          }
+        }
+      },
+      async getAllKota(_,args){
+        try {
+          let kategoriRef = await firestore.collection("list_kota").get()
+          
+          var arrTemp = []
+          kategoriRef.docs.forEach(element => {
+            
+            arrTemp.push(element.data().nama_kota)
+            
+          });
+          return {
+            code:200,
+            status:"Data berhasil diambil",
+            data: arrTemp
+          }
+        } catch (error) {
+          console.log(error)
+          return {
+            code:500,
+            status:"Server Error, akibat : " + e,
+            data:[]
+          }
+        }
+      },
+      async searchSurveiNormal(_,args){
+        try {
+          //dari sini 
+            let idTarget = []
+            const response = await fetch('https://server-sql-dot-hei-survei-v1.et.r.appspot.com/api/search',{
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json'
+              },
+              body: JSON.stringify({
+                cari : args.search
+              }),
+            })
+            const data = await response.json();
+            const obj = JSON.parse(JSON.stringify(data))
+            for (let index = 0; index < obj['hasil'].length; index++) { 
+              idTarget.push(obj['hasil'][index])
+            }
+            console.log(idTarget)
+
+            var surveiResult;
+            if(idTarget.length > 0){
+              let surveiRef = firestore.collection("h_survei").orderBy(FieldPath.documentId()).where(FieldPath.documentId(), 'in', idTarget).where('pakaiDemografi','==',false)
+              surveiResult = await surveiRef.get()
+
+            }
+            else{
+              return{
+                code: 200,
+                status: "success",
+                data:[]
+              }
+            }
+            
+            let snapshot = surveiResult.docs.map(doc => {return {id_survei : doc.id, ...doc.data()}})
+            for(let e in snapshot){  
+                snapshot[e].tanggal_penerbitan = snapshot[e].tanggal_penerbitan._seconds
+                snapshot[e].insentif = snapshot[e].insentifPerPartisipan
+                if(snapshot[e].gambarSurvei == null){
+                  snapshot[e].gambarSurvei = ""
+                }
+            }
+            return{
+                code: 200,
+                status: "Success",
+                data:snapshot
+            }
+        } catch (error) {
+            console.log(error)
+            return{
+                code: 500,
+                status: "failed",
+                data:[]
+            }
+        }
+      },
+        async cobafirestore(_,args){
+            try {
+                let surveiRef =  firestore.collection("latihan").where('kategori','in',['c','b'])
+                surveiRef = surveiRef.where(FieldPath.documentId(), 'in', ['o4jt04j','3498fg349fjis'] )
+                const result = await surveiRef.get()
+                let snapshot = result.docs.map(doc => {return {id_survei : doc.id, ...doc.data()}})
+                console.log(snapshot)
+                return "Sukses"
+            } catch (error) {
+                console.log(error)
+                return "Gagal"
+            }
+        },
+        // async getAllKategori(_,args){
+        //     try {
+        //       let kategoriRef = await firestore.collection("kategori").orderBy('nama').get()
+        //       const result = kategoriRef.docs.map(doc => {return {
+        //         id: doc.id,
+        //         nama : doc.data().nama,
+        //       }})
+        //       return {
+        //         code:200,
+        //         message:"Data berhasil diambil",
+        //         data: result
+        //       }
+        //     } catch (error) {
+        //       console.log(error)
+        //       return {
+        //         code:500,
+        //         message:"Server Error, akibat : " + e,
+        //         data:[]
+        //       }
+        //     }
+        //   },
+        async getAllSurvei(_,args){
+            try {
+                const surveiRef =  await firestore.collection("survei-v2").get()
+                let snapshot = surveiRef.docs.map(doc => {return {id_survei : doc.id, ...doc.data()}})
+                for(let e in snapshot){
+                    console.log(snapshot[e].tanggal)
+                    snapshot[e].tanggal = snapshot[e].tanggal._seconds
+                }
+                return{
+                    code: 200,
+                    status: "Success",
+                    data:snapshot
+                }
+            } catch (error) {   
+                console.log(error)
+                return{
+                    code: 500,
+                    status: "failed",
+                    data:[]
+                }
+            }
+        },
+        async loginUser(_,args){
+            try {
+                const userRef = await firestore.collection("Users-survei").where('email', '==', args.email).get()
+                if(!userRef.empty){
+                    let snapshot = userRef.docs.map(doc => {return {id : doc.id,...doc.data()}})
+                    let user = snapshot[0]
+                    console.log(user)
+                    const isMatch = await bcryptjs.compare(args.password,user.password)
+                    if(isMatch){
+                        if(user.verified){
+                            return {
+                                status:"success",
+                                pesan:"Berhasil masuk",
+                                code:200,
+                                data: user.id
+                            }
+                        }
+                        else{
+                            return {
+                                status:"failed",
+                                pesan:"Verifikasi email anda terlebih dahulu",
+                                code:400,
+                                data: ""
+                            }
+                        }
+                    }
+                    else{
+                        return {
+                            status:"failed",
+                            pesan:"Kredensial Tidak Sesuai",
+                            code:400,
+                            data: ""
+                        }
+                    }
+                }
+                else{
+                    return {
+                        status:"failed",
+                        pesan:"Kredensial tidak ditemukan",
+                        code:400,
+                        data:""
+                    }
+                }
+            } catch (error) {
+                return {
+                    status:"failed",
+                    pesan:"Terjadi kesalahan server",
+                    code:500,
+                    data:""
+                }
+            }
+        },
+        async loginGoogle(){
+            try {
+                const usersRef =  firestore.collection("Users-survei");
+                const emailPengecekan = await usersRef.where('email', '==', args.email).get()
+                if(!emailPengecekan.empty){
+                    //ini situasi kalau sudah ada dibikin datanya
+                    return{
+                        status:"success",
+                        pesan:"Data sudah ada",
+                        code:201
+                    }
+                }
+                else{
+                    let idBaru = uuidv4().substring(0,7);
+                    let user = {
+                        'email' : args.email,
+                        'password' : '',
+                        'verified' : true,
+                        "waktu_pendaftaran" : Timestamp.now(),
+                        'isBanned' : false,
+                        'kota' : '',
+                        'interest' : []
+                    }
+                    const res = await firestore.collection("Users-survei").doc(idBaru).set(user)
+                    console.log(res)
+                    return{
+                        status:"success",
+                        pesan:"Data tambahan telah dibuat",
+                        code:200
+                    }
+                }
+            } catch (error) {
+                console.log(error)
+                return{
+                    status:"success",
+                    pesan:"Terjadi Kesalahan Server",
+                    code:500
+                }
+            }
+            
+        },
+        async getDataUser(_,args){
+            try {
+                const userRef = await firestore.collection("Users-survei").doc(args.idUser).get()
+                console.log(userRef.data())
+
+                let result = {
+                    'id_user' : args.id,
+                    'email' : userRef.data().email,
+                    'password' : '',
+                    'verified' : userRef.data().verified,
+                    "waktu_pendaftaran" : userRef.data().waktu_pendaftaran,
+                    'isBanned' : userRef.data().isBanned,
+                    'kota' :userRef.data().kota,
+                    'interest' : userRef.data().interest,
+                    'url_gambar' : userRef.data().urlGambar,
+                    'isAuthenticated' : userRef.data().isAuthenticated,
+                    'poin' : userRef.data().poin,
+                    'tglLahir' : userRef.data().tglLahir
+                }
+                result.waktu_pendaftaran = result.waktu_pendaftaran._seconds
+                result.tglLahir = result.tglLahir._seconds
+                return {
+                    code : 200,
+                    pesan: "Berhasil Ambil Data User",
+                    data : result,
+                }
+            } catch (error) {
+                // let result = {
+                //     'id_user' : args.id,
+                //     'email' : "",
+                //     'password' : '',
+                //     'verified' : "",
+                //     "waktu_pendaftaran" : 0,
+                //     'isBanned' : "",
+                //     'kota' :"",
+                //     'interest' : "",
+                //     'url_gambar' : "",
+                //     'poin' : 1000,
+                // }
+                return {
+                    code : 500,
+                    pesan: "Terjadi eeror" + error,
+                    data : null,
+                }
+            }
+        },
+        async getFAQ(_,args){
+            try {
+              let ref = await firestore.collection('faq').get()
+              if(ref.empty){
+                return {
+                  code:400,
+                  status:"data kosong",
+                  data:[]
+                }
+              }
+              else{
+                let result = ref.docs.map(doc => {return {
+                  id : doc.id,
+                  pertanyaan : doc.data().pertanyaan,
+                  jawaban : doc.data().jawaban,
+                }})
+                return {
+                  code:200,
+                  status:"data berhasil diambil",
+                  data: result
+                }
+              }
+            } catch (error) {
+              console.log(e)
+              return {
+                code:500,
+                status:"Server Error : " + error,
+                data:[]
+              }
+            }
+        },
+        async kirimSMS(_,args){
+          const accountSid = 'AC8a68c096ae1572ffcd6af6a3c36a0144';
+          const authToken = 'd8bbf31a9e79daf0df5f123dbf27c172';
+          const client = require('twilio')(accountSid, authToken);
+          client.messages
+          .create({
+            body: 'Hello from twilio-node',
+            to: '+6287842231729', // Text your number
+            from: '+19087414150', // From a valid Twilio number
+          })
+          .then((message) => console.log(message.sid)).catch(err => console.log(err))
+
+          return{
+              status:"200",
+              pesan:"percobaan selesai",
+              code:200
+            }
+        },
+        async cekNoHp(_,args){
+          try {
+            let ref = await firestore.collection('Users-survei').where('noHP', '==',args.noHP).get()
+            if(ref.empty){
+              return{
+                status:"success",
+                pesan:"NoHP aman",
+                code:200
+              }
+            }
+            else{
+              return{
+                status:"failed",
+                pesan:"NoHP telah terpakai",
+                code:400
+              }
+            }
+          } catch (error) {
+            console.log(e)
+            return{
+              status:"failed",
+              pesan:"Server masalah",
+              code:500
+            }
+          }
+        }
+    },
+    Mutation:{
+      async kirimPenilaianSurvei(_,args){
+        try {
+          
+          let penilaianRef = await firestore.collection('penilaian-survei').add({
+            idSurvei : args.idSurvei,
+            idUser: args.idUser,
+            emailUser : args.email,
+            pesan : args.pesan,
+            nilai : args.nilai,
+            waktu_penilaian : Timestamp.now()
+          })
+          console.log("sampai sini")
+          return {
+            code: 200,
+            status: "success",
+            pesan:"Penilaian Terkirim",
+          }
+        } catch (error) {
+          console.log(error)
+          return {
+            code: 500,
+            status: "failed",
+            pesan:"Terjadi kegagalan server",
+          }
+        }
+      },
+      async kirimReport(_,args){
+        try {
+          let buatRef = await firestore.collection('laporan_survei').add({
+            laporan : args.laporan,
+            email_pelapor : args.email,
+            idUser:args.idUser,
+            idSurvei:args.idSurvei,
+            tanggal : Timestamp.now(),
+            judulSurvei : args.judulSurvei
+          })
+          return {
+            code: 200,
+            status: "success",
+            pesan:"Laporan Terkirim",
+          }
+        } catch (error) {
+          console.log(error)
+          return {
+            code: 500,
+            status: "failed",
+            pesan:"Terjadi kegagalan server",
+          }
+        }
+      },
+      async ajukanPencairan(_,args){
+        try {
+          let pengecekanRef = await firestore.collection('pencairan').where('aktif','==','Diproses').where('idUser','==',args.idUser).get()
+          if(pengecekanRef.empty){
+            let buatRef = await firestore.collection('pencairan').add({
+              jumlahPoin : args.jumlah,
+              waktu_pengajuan : Timestamp.now(),
+              idUser : args.idUser,
+              emailUser: args.email,
+              aktif : "Diproses",
+            })
+            return {
+              code: 200,
+              status: "success",
+              pesan:"Permintaan terkirim",
+            }
+          }
+          else{
+            return {
+              code: 400,
+              status: "failed",
+              pesan:"Sudah ada pencairan sebelumnya",
+            }
+          }
+
+          
+        } catch (error) {
+          console.log(error)
+          return {
+            code: 500,
+            status: "failed",
+            pesan:"Terjadi kegagalan server",
+          }
+        }
+      },
+      async percobaanX(_,args){
+        try {
+          console.log("mencoba update demo")
+          console.log(args.kota)
+          console.log(args.tgl)
+          // console.log(args.interest)
+          console.log(args.idUser)
+          return{
+            code: 200,
+            status: "success",
+            pesan:"Demografi berhasil diUpdate"
+          }
+        } catch (error) {
+          console.log(error)
+          return{
+            code: 500,
+            status: "failed",
+            pesan:"Terjadi kesalahan Server"
+          }
+        }
+      },
+      async updateDemo(_,args){
+        try {
+          console.log("mencoba update demo")
+          let userRef = await firestore.collection('Users-survei').doc(args.idUser).update({
+            interest : args.interest,
+            kota : args.kota,
+            tglLahir : Timestamp.fromDate(new Date(args.tgl * 1000))
+          })
+          return{
+            code: 200,
+            status: "success",
+            pesan:"Demografi berhasil diUpdate"
+          }
+        } catch (error) {
+          console.log(error)
+          return{
+            code: 500,
+            status: "failed",
+            pesan:"Terjadi kesalahan Server"
+          }
+        }
+      },
+      async updateFoto(_,args){
+        try {
+          //ganti semua data
+          let userRef = await firestore.collection('Users-survei').doc(args.idUser).update({
+            urlGambar:args.urlFoto
+          })
+          return{
+            code: 200,
+            status: "success",
+            pesan:"Gambar berhasil diUpdate"
+          }
+        } catch (error) {
+          console.log(error)
+          return{
+            code: 500,
+            status: "failed",
+            pesan:"Terjadi kesalahan Server"
+          }
+        }
+      },
+      async updatePassword(_,args){
+        try {
+          
+          //ganti semua data
+          //cek password lama sudah sesuai tidak
+           // console.log(await bcryptjs.hash(args.passwordLama, 8))
+          // console.log(await bcryptjs.compare(args.passwordLama, '$2a$08$RsHSTMZrcqxyneNn6YwhMO3TQre3fHIk75uFYdaziKbowgQkOxZ2W'))
+          let cekRef = await firestore.collection('Users-survei').doc(args.idUser).get()
+          // console.log(cekRef.data())
+
+          // var isMatch = await bcryptjs.compare(args.passwordLama, cekRef.data().password)
+          // if(cekRef.data().password == '')isMatch = false
+          var isMatch = true
+          if(isMatch){
+            let passCrypted = await bcryptjs.hash(args.password, 8)
+            console.log("ini paswword baru -> "+  passCrypted)
+            let userRef = await firestore.collection('Users-survei').doc(args.idUser).update({
+              password: passCrypted
+            })
+            
+            return{
+              code: 200,
+              status: "success",
+              pesan: "Password berhasil diUpadte"
+            }
+          }
+          else{
+            return{
+              code: 400,
+              status: "failed",
+              pesan: "Password lama tidak sesuai "
+            }
+          }
+        } catch (error) {
+          console.log(error)
+          return{
+            code: 500,
+            status: "failed",
+            pesan:"Terjadi kesalahan Server"
+          }
+        }
+      },
+      async autentikasiKodeSms(_,args){
+        try {
+        let autentikasiRef = await firestore.collection('autentikasi-user-app').doc(args.idUser).get()
+        
+        if(autentikasiRef.data().kodeAuth == args.kode){
+          let batch = firestore.batch()
+          batch.update(firestore.collection('Users-survei').doc(args.idUser),{
+            'isAuthenticated' : true
+          })
+          await batch.commit()
+          return{
+            status:"success",
+            pesan:"Kode autentikasi benar",
+            code:200
+          }
+        }
+        else{
+          return{
+            status:"failed",
+            pesan:"Kode autentikasi salah",
+            code:400
+          }
+        }
+        } catch (error) {
+          console.log(error)
+          return{
+            status:"failed",
+            pesan:"Terjadi Kesalahan Server",
+            code:500
+          }
+        }
+        
+      },
+        async kirimSmsAuth(_,args){
+          try {
+            //amibl kode autentikasinya
+            //bikin kode baru\
+            let batch = firestore.batch()
+            let angkaRandom = Math.floor(Math.random() * 1000000).toString() 
+            let idBaru = uuidv4().substring(0,7);
+
+            batch.set(firestore.collection('autentikasi-user-app').doc(args.idUser),{
+              'kodeAuth' : angkaRandom,
+            })
+
+            batch.update(firestore.collection('Users-survei').doc(args.idUser),{
+              'noHP' : args.noHP
+            })
+
+            const accountSid = 'ACcaba4015e144fff50ea2561363668995';
+            const authToken = '9419fb53afed243021c58f43ea646436';
+            const client = require('twilio')(accountSid, authToken);
+            let isSuccess = false;
+            await client.messages
+            .create({
+              body: 'Kode Autentikasi Akun Hei-Survei anda adalah ' + angkaRandom,
+              to: '+62' + args.noHP, // Text your number
+              from: '+14793485757', // From a valid Twilio number
+            })
+            .then(
+              (message) => {
+                console.log(message.sid)
+                isSuccess = true;
+              } 
+            ).catch(
+              err =>{
+                console.log(err)
+                isSuccess = false
+              } 
+              )
+              if(isSuccess){
+                await batch.commit()
+                return{
+                    status:"200",
+                    pesan:"OTP berhasil terkirim",
+                    code:200
+                }
+              }
+              else{
+                return{
+                  status:"200",
+                  pesan:"No HP tidak benar",
+                  code:400
+              }
+              }
+            
+            //kirim sms
+          } catch (error) {
+            return {
+              status:"fail",
+              pesan:"Terjadi kesalah Server: "+error,
+              code:500
+            }
+          }
+        },
+
+        async reportSurvei(_,args){
+            try {
+              const reportRef = await firestore.collection("report-survei").add({
+                'idSurvei' : args.idSurvei,
+                'idUser' : args.idUser,
+                'pesan' : args.pesan
+              })
+              return {
+                status:"success",
+                data:"report berhasil dikirim",
+                code:200
+              }
+            } catch (error) {
+              return {
+                status:"fail",
+                data:"Terjadi kesalah Server: "+error,
+                code:500
+              }
+            }
+          },
+        
+        // async gantiGambarUser(_,args){
+        //     try {
+        //         const userRef = await firestore.collection("Users-survei").doc(args.idUser).update({
+        //             'urlGambar' : args.urlBaru,
+        //         })
+        //         return {
+        //             status:"sukses",
+        //             pesan:"Update gambar berhasil",
+        //             code:200
+        //         }
+
+        //     } catch (error) {
+        //         return {
+        //             status:"failed",
+        //             pesan:"Terjadi kesalahan server",
+        //             code:500
+        //         }
+        //     }
+            
+        // },
+      //   async registerUser(_,args){
+      //     try {
+      //         const usersRef =  firestore.collection("Users-survei");
+      //         const emailPengecekan = await usersRef.where('email', '==', args.email).get()
+      //         if(!emailPengecekan.empty){
+      //             return {
+      //                 status:"failed",
+      //                 pesan:"Email telah digunakan",
+      //                 code:400
+      //             }
+      //         }
+      //         else{
+      //             let idBaru = uuidv4().substring(0,7);
+      //             let passCrypted = await bcryptjs.hash(args.password, 8)
+      //             let user = {
+      //                 'email' : args.email,
+      //                 'password' : passCrypted,
+      //                 'verified' : true,
+      //                 "waktu_pendaftaran" : Timestamp.now(),
+      //                 'tglLahir' : Timestamp.now(),
+      //                 'isBanned' : false,
+      //                 'isAuthenticated' : false,
+      //                 'kota' : '',
+      //                 'interest' : [],
+      //                 'urlGambar' : "https://firebasestorage.googleapis.com/v0/b/hei-survei-v1.appspot.com/o/profile%2Ffoto_awal.jpeg?alt=media&token=8d1eca2f-bb23-4403-8100-892a8c4a6dcf",
+      //                 'poin' : 0,
+      //             }
+      //             let batch = firestore.batch()
+                  
+
+      //             batch.create(firestore.collection('Users-survei').doc(idBaru),user)
+                  
+      //             // batch.create(firestore.collection('autentikasi-user-app').doc(idBaru),{
+      //             //   'kodeAuth' : 0,
+      //             // })
+                  
+      //             await batch.commit()
+      //             return{
+      //               status:"success",
+      //               pesan:"Berhasil Daftar, Silahkan Verifikasi email",
+      //               code:200
+      //             }
+
+                  
+      //         }
+      //     } catch (error) {
+      //         console.log(error)
+      //         return{
+      //             status:"500",
+      //             pesan:"terjadi kesalahan server",
+      //             code:500
+      //           }
+      //     }
+      // },
+        async registerUser(_,args){
+            try {
+                const usersRef =  firestore.collection("Users-survei");
+                const emailPengecekan = await usersRef.where('email', '==', args.email).get()
+                if(!emailPengecekan.empty){
+                    return {
+                        status:"failed",
+                        pesan:"Email telah digunakan",
+                        code:400
+                    }
+                }
+                else{
+                    let idBaru = uuidv4().substring(0,7);
+                    let passCrypted = await bcryptjs.hash(args.password, 8)
+                    let user = {
+                        'email' : args.email,
+                        'password' : passCrypted,
+                        'verified' : false,
+                        "waktu_pendaftaran" : Timestamp.now(),
+                        'tglLahir' : Timestamp.now(),
+                        'isBanned' : false,
+                        'isAuthenticated' : false,
+                        'kota' : '',
+                        'interest' : [],
+                        'urlGambar' : "https://firebasestorage.googleapis.com/v0/b/hei-survei-v1.appspot.com/o/profile%2Ffoto_awal.jpeg?alt=media&token=8d1eca2f-bb23-4403-8100-892a8c4a6dcf",
+                        'poin' : 0,
+                    }
+                    let batch = firestore.batch()
+                    
+
+                    batch.create(firestore.collection('Users-survei').doc(idBaru),user)
+                    
+                    batch.create(firestore.collection('autentikasi-user-app').doc(idBaru),{
+                      'kodeAuth' : 0,
+                    })
+                    
+                    // const res = await firestore.collection("Users-survei").doc(idBaru).set(user)
+                    // console.log(res)
+                    const transporter = nodemailer.createTransport({ 
+                        service: 'hotmail', 
+                        port: 465,
+                        secure: false,
+                        logger : true,
+                        auth: { 
+                            user: 'kennylisal@hotmail.com', 
+                            pass: 'Ipshield21'
+                        } 
+                    });
+
+                    const token = jwt.sign({
+                        code : 'KunciAppSurvei',
+                        idUser : idBaru
+                    },'KunciRahasia',{expiresIn : '100m'})
+
+                    const mailConfigurations = { 
+    
+                        // It should be a string of sender/server email 
+                        from: 'kennylisal@hotmail.com', 
+                      
+                        to: args.email, 
+                      
+                        // Subject of Email 
+                        subject: 'Verifikasi Akun Hei. Survei', 
+                          
+                        // This would be the text of email body 
+                        text: `Selamat datang di Hei-Survei, silahkan klik link dibawah untuk verifikasi 
+                        https://verifikasi-heisurvei-dot-hei-survei-v1.et.r.appspot.com/verify-userApp/${token}
+                               ` 
+                    };
+
+                    transporter.sendMail(mailConfigurations, function(error, info){ 
+                        if (error){
+                          //throw Error(error);
+                          console.log(error)
+                          return{
+                            status:"500",
+                            pesan:"Terjadi Kesalahan Server",
+                            code:500
+                          }
+                        }
+                        else{
+                          console.log('Email Sent Successfully'); 
+                          console.log(info);
+                        }  
+                        
+                        
+                      });
+                          await batch.commit()
+                          return{
+                            status:"success",
+                            pesan:"Berhasil Daftar, Silahkan Verifikasi email",
+                            code:200
+                          }
+
+                    
+                }
+            } catch (error) {
+                console.log(error)
+                return{
+                    status:"500",
+                    pesan:"terjadi kesalahan server",
+                    code:500
+                  }
+            }
+        },
+        async registerUserGoogle(_,args){
+            try {
+                const userRef = await firestore.collection("Users-survei").where('email', '==', args.email).get()
+                if(userRef.empty){
+                    let idBaru = uuidv4().substring(0,7);
+                    let userBaru = {
+                        
+                        'email' : args.email,
+                        'password' : '',
+                        'verified' : true,
+                        "waktu_pendaftaran" : Timestamp.now(),
+                        'isBanned' : false,
+                        'kota' :'',
+                        'interest' : [],
+                        'urlGambar' : args.urlGambar,
+                        'tglLahir' : Timestamp.now(),
+                        'isAuthenticated' : false,
+                        'poin' : 0,
+                        
+                    }
+                    const res = await firestore.collection("Users-survei").doc(idBaru).set(userBaru)
+                    return {
+                        status:"success",
+                        pesan:"Berhasil masuk",
+                        code:200,
+                        data: idBaru
+                    }
+                }
+                else{
+                    let snapshot = userRef.docs.map(doc => {return {id : doc.id,...doc.data()}})
+                    let user = snapshot[0]
+                    if(user.password === ""){
+                      return {
+                        status:"success",
+                        pesan:"Berhasil masuk",
+                        code:200,
+                        data: user.id
+                      }
+                    }
+                    else{
+                      return {
+                        status:"failed",
+                        pesan:"Akun google tidak kredibel",
+                        code:400,
+                        data: ""
+                      }
+                    }
+                    
+                }
+            } catch (error) {
+                return {
+                    status:"failed",
+                    pesan:"Terjadi kesalahan server",
+                    code:500,
+                    data: ""
+                }
+            }
+            
+        },
+
+        
+    }
+    
+}
+
+module.exports = {resolvers}
+
+// async registerUserApp(_,args){
+        //     try {
+        //       const usersRef =  firestore.collection("Users-app");
+        //       const emailPengecekan = await usersRef.where('email', '==', args.email).get()
+        //       if(!emailPengecekan.empty){
+        //         return {
+        //           status:"failed",
+        //           data:"Email telah digunakan",
+        //           code:400
+        //         }
+        //       }
+        //       else{
+        //         let idBaru = uuidv4().substring(0,7);
+        //         let passCrypted = await bcryptjs.hash(args.password, 8)
+        //         let user = {
+        //           'email' : args.email,
+        //           'password' : passCrypted,
+        //           'verified' : false,
+        //           "waktu_pendaftaran" : Timestamp.now(),
+        //           'isBanned' : false,
+        //           'kota' : '',
+        //           'interest' : []
+        //         }
+  
+        //         const res = await firestore.collection("Users-app").doc(idBaru).set(user)
+        //         console.log(res)
+  
+        //         //========bagian verifkasi email
+        //         const transporter = nodemailer.createTransport({ 
+        //           service: 'hotmail', 
+        //           port: 465,
+        //           secure: false,
+        //           logger : true,
+        //           auth: { 
+        //               user: 'kennylisal@hotmail.com', 
+        //               pass: 'Ipshield21'
+        //           } 
+        //       });
+        
+        //       const token = jwt.sign({
+        //         code : 'KunciAyaXBa',
+        //         idUser : idBaru
+        //       },'KunciRahasia',{expiresIn : '100m'})
+  
+        //       const mailConfigurations = { 
+      
+        //         // It should be a string of sender/server email 
+        //         from: 'kennylisal@hotmail.com', 
+              
+        //         to: args.email, 
+              
+        //         // Subject of Email 
+        //         subject: 'Verifikasi Akun Hei. Survei', 
+                  
+        //         // This would be the text of email body 
+        //         text: `Hi! There, You have recently visited  
+        //                our website and entered your email. 
+        //                Please follow the given link to verify your email 
+        //                http://localhost:3000/verify-app/${token}
+        //                ` 
+        //     };
+  
+        //     transporter.sendMail(mailConfigurations, function(error, info){ 
+        //       if (error){
+        //         //throw Error(error);
+        //         console.log(error)
+        //         return{
+        //           status:"500",
+        //           data:"gagal",
+        //           code:500
+        //         }
+        //       }
+        //       else{
+        //         console.log('Email Sent Successfully'); 
+        //         console.log(info);
+        //       }  
+              
+              
+        //     });
+        //     //=====================================================bagian verifikasi
+        //         return{
+        //           status:"success",
+        //           data:"User berhasil ditambahkan, Silahkan Verifikasi email anda",
+        //           code:200
+        //         }
+        //       }
+        //       } catch (error) {
+        //         return{
+        //           status:"500",
+        //           data:"gagal",
+        //           code:500
+        //         }
+        //       }
+            
+        //   },
