@@ -1,0 +1,273 @@
+const {gql} = require("apollo-server-express")
+
+const typeDefs = gql`
+    type Query{
+        #profileController
+        getAllKota:responString!
+        getAllInterest:responString!
+        getAllHistory(idUser:String!):responHistory
+        cekNoHp(noHP:String!):ResponStandar!
+
+        getSejarahPencairan(idUser:String!):ResponPencairan!
+        #
+
+        loginUser(email:String!,password:String!):ResponString!
+        loginGoogle(email:String!):ResponStandar!
+        getDataUser(idUser:String!):responUser
+        getFAQ:responFAQ
+
+        kirimSMS:ResponStandar
+        getAllSurvei:ResponSurvei!
+        
+        
+        cobafirestore:String
+        #SearchController
+        searchSurveiNormal(search:String!):responHSurvei!
+        getSurveiDetail(idSurvei:String):surveiDetail
+        getDefaultSurvei:responHSurvei
+
+        #controller-halaman utama
+        getSurveiTerbaru:responHSurvei
+        getSurveiUjiCoba:responHSurvei
+        #Detail-controller
+        cekIsiSurvei(idSurvei:String!):ResponStandar!
+        getIdForm(idSurvei:String!):ResponStandar!
+
+        #Rekomendasi
+        getAllDemoSurvei:responSurveiDemo!
+
+        #pengecekan survei
+        getSurveiTerlarang(idUser:String!):responString!
+        getSurveiTerlarangUjiCoba(idUser:String!):responString!
+
+        rekomendasiPakaiPengecekan:ResponStandar
+        demografiBisaUpdate:ResponStandar
+    }
+
+    type Mutation{
+        #AuthController
+        registerUser(email:String!,password:String!):ResponStandar!
+        registerUserGoogle(email:String!,urlGambar:String!):ResponString!
+        # gantiGambarUser(idUser:String!,urlBaru:String!):ResponStandar!
+
+        #pindahan
+        reportSurvei(idSurvei:String!,idUser:String!,pesan:String):ResponStandar!
+        #registerUserApp(email:String!,password:String!):ResponStandar
+
+        #autentikasi tambaha
+        kirimSmsAuth(idUser:String,noHP:String!):ResponStandar!
+        autentikasiKodeSms(kode:String!,idUser:String!):ResponStandar!
+
+        #profileControler
+        updatePassword(password:String!,idUser:String!,passwordLama:String!):ResponStandar
+        updateFoto(urlFoto:String!,idUser:String!):ResponStandar
+        updateDemo(kota:String,tgl:Int,interest:[String],idUser:String):ResponStandar
+        percobaanX(kota:String,idUser:String,tgl:Int,):ResponStandar
+        ajukanPencairan(jumlah:Int!,idUser:String!,email:String!):ResponStandar!
+        #formController
+        kirimReport(laporan:String!,email:String!,idUser:String!,idSurvei:String!,judulSurvei:String!):ResponStandar!
+
+        #Kirim Penilaian
+        kirimPenilaianSurvei(pesan:String!,nilai:Int!,idSurvei:String!,email:String!,idUser:String!):ResponStandar!
+    }
+    type pencairan{
+        jumlahPoin:Int!,
+        waktu_pengajuan:Int!,
+        aktif:String!,
+    }
+    type ResponPencairan{
+        code:Int
+        status:String
+        data:[pencairan]
+    }
+    type responHistory{
+        code:Int
+        status:String
+        data:[history]
+    }
+    type history{
+        judul:String
+        deskripsi:String
+        isKlasik:Boolean
+        tglPengisian:Int
+        insentif:Int
+        gambarSurvei:String
+        id_survei:String!
+    }
+
+    type responString{
+        code: Int!
+        status:String!
+        data:[String!]
+    }
+    type responReward{
+        code: Int!
+        message:String!
+        insentif:Int!
+        special:Int!
+        biaya:Int!
+    }
+
+    type surveiDetail{
+        code: Int!
+        status:String!
+        survei: HSurvei
+        user: userDetail
+    }
+
+    type userDetail{
+        email:String!
+        username:String!
+    }
+
+    type User{
+        id_user:String
+        email:String!
+        password:String!
+        verified:Boolean!
+        waktu_pendaftaran:Int!
+        poin:Int!
+        kota:String!
+        interest:[String]
+        url_gambar:String!
+        isAuthenticated:Boolean!
+        tglLahir:Int!
+    }
+    type responUser{
+        pesan:String!
+        code:Int!
+        data:User
+    }
+
+    type ResponStandar{
+        status:String!
+        pesan:String!
+        code:Int!
+    }
+
+    type ResponString{
+        status:String!
+        pesan:String!
+        code:Int!
+        data:String!
+    }
+
+    type Survei{
+        judul:String!
+        deskripsi:String 
+        jumlahPartisipan:Int!
+        batasPartisipan:Int!
+        isKlasik:Int!
+        status:String!
+        tanggal:String!
+        durasi:Int!
+        harga:Int!
+        kategori:String!
+        id_form:String!
+        id_survei:String!
+    }
+
+    type SurveiX{
+        judul:String!
+        deskripsi:String 
+        id_form:String!
+        id_survei:String!
+        isKlasik:Int!
+        status:String!
+        tanggal:String!
+        durasi:Int!
+        harga:Int!
+        kategori:String!
+    }
+    type responSurveiDemo{
+        code: Int!
+        status:String!
+        data:[SurveiDemo]
+    }
+    type SurveiDemo{
+        judul:String
+        insentif:Int
+        tanggal_penerbitan:Int
+        deskripsi:String
+        isKlasik:Boolean
+        durasi:Int
+        status:String
+        id_survei:String
+        kategori:String
+        demografiUsia:Int!
+        demografiLokasi:[String]
+        demografiInterest:[String]
+        gambarSurvei:String
+    }
+    type HSurvei{
+        judul:String
+        insentif:Int
+        tanggal_penerbitan:Int
+        deskripsi:String
+        isKlasik:Boolean
+        durasi:Int
+        status:String
+        id_survei:String
+        kategori:String
+        #dSurvei dibawah
+        hargaPerPartisipan:Int
+        insentifPerPartisipan:Int
+        demografiUsia:Int
+        demografiLokasi:[String]
+        demografiInterest:[String]
+        batasPartisipan:Int
+        idForm:String
+        gambarSurvei:String
+    }
+    # type DSurvei{
+    #     hargaPerPartisipan:Int!
+    #     insentifPerPartisipan:Int!
+    #     demografiUsia:Int!
+    #     demografiLokasi:[String]
+    #     demografiInterest:[String]
+    #     batasPartisipan:Int!
+    #     idForm:String!
+        
+    # }
+    type responHSurvei{
+        code: Int!
+        status:String!
+        data:[HSurvei]
+    }
+
+    
+
+    type FAQ{
+    id:String!
+    pertanyaan:String!
+    jawaban:String!
+    }
+
+    type responFAQ{
+        code: Int!
+        status:String!
+        data:[FAQ]
+    }
+
+    type ResponSurvei{
+        code: Int!
+        status:String!
+        data:[SurveiX]
+    }
+
+    input AddSurveiInput{
+        judul:String!
+        deskripsi:String 
+        batasPartisipan:Int!
+        isKlasik:Boolean!
+        status:String!
+        durasi:Int!
+        harga:Int!
+        kategori:String!
+    }
+
+    
+
+`
+
+module.exports = {typeDefs}
